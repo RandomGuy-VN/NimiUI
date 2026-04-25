@@ -2778,7 +2778,7 @@ function NimiUI:CreateWindow(cfg)
 
     local size = cfg.Size or UDim2.fromOffset(820, 560)
     local sideW = cfg.SideBarWidth or 220
-    local windowRadius = cfg.Radius or 22
+    local windowRadius = cfg.Radius or 30
 
     -- Host ScreenGui
     local gui = new("ScreenGui", {
@@ -2925,6 +2925,17 @@ function NimiUI:CreateWindow(cfg)
         Size = UDim2.new(1, 0, 0, 44),
         ClipsDescendants = true,
         Parent = panel,
+    })
+    corner(header, windowRadius)
+    -- Hide the header's lower rounded corners so it joins the page area cleanly.
+    new("Frame", {
+        BackgroundColor3 = theme.HeaderEnd,
+        BorderSizePixel  = 0,
+        AnchorPoint = Vector2.new(0, 1),
+        Position    = UDim2.new(0, 0, 1, 0),
+        Size        = UDim2.new(1, 0, 0, math.min(windowRadius, 22)),
+        ZIndex      = 0,
+        Parent      = header,
     })
     local headerGrad = new("UIGradient", {
         Color = ColorSequence.new(theme.HeaderStart, theme.HeaderEnd),
