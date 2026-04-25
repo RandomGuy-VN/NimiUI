@@ -2073,7 +2073,7 @@ function Element.Input(section, cfg)
         Size     = UDim2.new(1, 0, 1, -(descY + 4)),
         Parent = card,
     })
-    corner(boxParent, 12)
+    corner(boxParent, 14)
     local boxStroke = stroke(boxParent, theme.InputBorder, 1, 0.2)
     padding(boxParent, {6, 12, 6, 12})
 
@@ -2776,8 +2776,9 @@ function NimiUI:CreateWindow(cfg)
     self._tabs   = {}
     self._cfg    = cfg
 
-    local size = cfg.Size or UDim2.fromOffset(580, 460)
-    local sideW = cfg.SideBarWidth or 200
+    local size = cfg.Size or UDim2.fromOffset(820, 560)
+    local sideW = cfg.SideBarWidth or 220
+    local windowRadius = cfg.Radius or 22
 
     -- Host ScreenGui
     local gui = new("ScreenGui", {
@@ -2800,7 +2801,7 @@ function NimiUI:CreateWindow(cfg)
         ClipsDescendants = true,
         Parent = gui,
     })
-    corner(root, 14) -- rounded but not as extreme as desktop's 30 (Roblox screens are smaller)
+    corner(root, windowRadius)
     if cfg.HasOutline ~= false then
         stroke(root, theme.InputBorder, 1, 0.3)
     end
@@ -3024,10 +3025,23 @@ function NimiUI:CreateWindow(cfg)
         minimized = not minimized
         if minimized then
             fullSize = root.Size
+            -- Hide sidebar + page area; keep only the header strip visible.
+            sidebar.Visible = false
+            self._pageHost.Visible = false
+            -- Reposition header to span the full root width since sidebar is gone.
+            panel.Position = UDim2.new(0, 0, 0, 0)
+            panel.Size     = UDim2.new(1, 0, 1, 0)
             tweenInfo(root, EASE.Soft(0.28),
                 { Size = UDim2.fromOffset(fullSize.X.Offset, 44) })
         else
             tweenInfo(root, EASE.Spring(0.32), { Size = fullSize })
+            task.delay(0.18, function()
+                if minimized then return end
+                sidebar.Visible = true
+                self._pageHost.Visible = true
+                panel.Position = UDim2.new(0, sideW, 0, 0)
+                panel.Size     = UDim2.new(1, -sideW, 1, 0)
+            end)
         end
     end)
 
