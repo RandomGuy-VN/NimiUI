@@ -3047,7 +3047,7 @@ function NimiUI:CreateWindow(cfg)
             BackgroundTransparency = 1, AutoButtonColor = false,
             Font = FONT_BOLD, Text = symbol,
             TextColor3 = Color3.fromRGB(255,255,255),
-            TextSize = isMobile and 18 or 14,
+            TextSize = isMobile and 24 or 20,
             AnchorPoint = Vector2.new(1, 0.5),
             Position = UDim2.new(1, -x, 0.5, 0),
             Size = UDim2.fromOffset(btnSize, btnSize),
@@ -3063,8 +3063,8 @@ function NimiUI:CreateWindow(cfg)
         end)
         return b
     end
-    local btnClose    = headerBtn("✕", 6, true)
-    local btnMinimize = headerBtn("—", 6 + btnSize + 4, false)
+    local btnClose    = headerBtn("×", 8, true)
+    local btnMinimize = headerBtn("–", 8 + btnSize + 6, false)
 
     -- Page host (right of sidebar, below header)
     self._pageHost = new("Frame", {
