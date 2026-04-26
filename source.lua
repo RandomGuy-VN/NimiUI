@@ -3281,14 +3281,15 @@ function NimiUI:CreateWindow(cfg)
         Parent = gui,
     })
 
-    -- Root window frame - Using CanvasGroup to perfectly clip rounded corners
-    local root = new("CanvasGroup", {
+    -- Root window frame - Reverted to Frame (CanvasGroup causes dark tint bug on some graphics levels)
+    local root = new("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position    = UDim2.fromScale(0.5, 0.5),
         Size        = size,
         BackgroundColor3 = theme.Surface0 or theme.Bg,
         BackgroundTransparency = cfg.Transparent and 0.08 or 0,
         BorderSizePixel = 0,
+        ClipsDescendants = true,
         ZIndex = 1,
         Parent = gui,
     })
@@ -3638,8 +3639,8 @@ function NimiUI:CreateWindow(cfg)
     -- Page host (right of sidebar, below header)
     self._pageHost = new("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.new(0, 0, 0, 44),
-        Size     = UDim2.new(1, 0, 1, -44),
+        Position = UDim2.new(0, 0, 0, 46),
+        Size     = UDim2.new(1, 0, 1, -46),
         Parent = panel,
     })
 
