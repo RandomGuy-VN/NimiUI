@@ -2785,18 +2785,21 @@ function NimiUI:CreateWindow(cfg)
     self._tabs   = {}
     self._cfg    = cfg
 
-    -- Mobile / small-viewport detection: shrink defaults so the window fits.
+    -- Window-config sizing pattern adapted from Luna-Interface-Suite:
+    -- breakpoint 774x503; below that, fill viewport with margin.
+    -- Visual theme/colors are NOT taken from Luna — those remain NimiUI's.
     local cam = workspace.CurrentCamera
     local vp = (cam and cam.ViewportSize) or Vector2.new(1280, 720)
     local isTouch  = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
     local isMobile = cfg.Mobile
-    if isMobile == nil then isMobile = isTouch or vp.X < 700 end
+    if isMobile == nil then isMobile = isTouch or (vp.X <= 774 or vp.Y <= 503) end
 
     local defaultSize, defaultSide, defaultRadius
     if isMobile then
-        local w = math.min(vp.X - 16, 540)
-        local h = math.min(vp.Y - 60, 420)
-        defaultSize   = UDim2.fromOffset(w, h)
+        defaultSize   = UDim2.fromOffset(
+            math.max(vp.X - 100, 320),
+            math.max(vp.Y - 100, 280)
+        )
         defaultSide   = 56   -- icon-only collapsed sidebar
         defaultRadius = 22
     else
