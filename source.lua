@@ -3289,11 +3289,21 @@ function NimiUI:CreateWindow(cfg)
         BackgroundColor3 = theme.Surface0 or theme.Bg,
         BackgroundTransparency = cfg.Transparent and 0.08 or 0,
         BorderSizePixel = 0,
-        ClipsDescendants = true,
         ZIndex = 1,
         Parent = gui,
     })
+    
+    -- Using a main container to handle proper UICorner clipping in Roblox
+    local mainContainer = new("Frame", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true,
+        Parent = root,
+    })
+    
     corner(root, windowRadius)
+    corner(mainContainer, windowRadius)
+    
     -- Subtle vertical surface gradient adds depth across the whole window
     linearGradient(root, {
         theme.Surface0 or theme.Bg,
@@ -3313,7 +3323,7 @@ function NimiUI:CreateWindow(cfg)
         BackgroundColor3 = theme.Surface1 or theme.Sidebar,
         BorderSizePixel  = 0,
         Size             = UDim2.new(0, sideW, 1, 0),
-        Parent = root,
+        Parent = mainContainer,
     })
     linearGradient(sidebar, {
         theme.Surface1 or theme.Sidebar,
@@ -3470,7 +3480,7 @@ function NimiUI:CreateWindow(cfg)
         BorderSizePixel  = 0,
         Position = UDim2.new(0, sideW, 0, 0),
         Size     = UDim2.new(1, -sideW, 1, 0),
-        Parent = root,
+        Parent = mainContainer,
     })
 
     -- Header with gradient + animated rotation
@@ -3481,17 +3491,9 @@ function NimiUI:CreateWindow(cfg)
         ClipsDescendants = true,
         Parent = panel,
     })
-    corner(header, windowRadius)
-    -- Hide the header's lower rounded corners so it joins the page area cleanly.
-    new("Frame", {
-        BackgroundColor3 = theme.AccentLow or theme.HeaderEnd,
-        BorderSizePixel  = 0,
-        AnchorPoint = Vector2.new(0, 1),
-        Position    = UDim2.new(0, 0, 1, 0),
-        Size        = UDim2.new(1, 0, 0, math.min(windowRadius, 22)),
-        ZIndex      = 0,
-        Parent      = header,
-    })
+    -- Notice: Removed the UICorner on header so it spans edge to edge correctly inside panel
+    -- and doesn't conflict with root corner clips.
+    
     -- Three-stop accent gradient gives the header a richer "glow" feel.
     local headerGrad = new("UIGradient", {
         Color = ColorSequence.new({
@@ -3709,6 +3711,9 @@ function NimiUI:CreateWindow(cfg)
             panel.Size     = UDim2.new(1, 0, 1, 0)
             tweenInfo(root, EASE.Soft(0.28),
                 { Size = UDim2.fromOffset(fullSize.X.Offset, 46) })
+            -- Match mainContainer with root size logic
+            tweenInfo(mainContainer, EASE.Soft(0.28),
+                { Size = UDim2.fromOffset(fullSize.X.Offset, 46) })
             if rootShadow then
                 tween(rootShadow, 0.28, {
                     Size = UDim2.new(0, fullSize.X.Offset + 64, 0, 46 + 64),
@@ -3716,6 +3721,7 @@ function NimiUI:CreateWindow(cfg)
             end
         else
             tweenInfo(root, EASE.Spring(0.32), { Size = fullSize })
+            tweenInfo(mainContainer, EASE.Spring(0.32), { Size = fullSize })
             if rootShadow then
                 tween(rootShadow, 0.32, {
                     Size = UDim2.new(0, fullSize.X.Offset + 64, 0, fullSize.Y.Offset + 64),
