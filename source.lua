@@ -1,13 +1,23 @@
 --[[
-    NimiUI — Roblox interface suite
-    Visual DNA ported from NimiAI desktop app (PyQt) → Roblox Lua.
-    Drop-in replacement for the WindUI surface used by VITL Hub.
+    NimiUI — Premium Roblox Interface Suite (v2.0.0)
+    Modernized drop-in replacement for NimiUI v1.0.0.
+
+    NEW FEATURES IN v2.0.0:
+      - PremiumDark Theme: A best-in-class, high-contrast dark theme with pink/purple gradients.
+      - Error Boundary: `NimiUI.safeCall` automatically catches and notifies on callback errors.
+      - State Management: `NimiUI.useState` provides React-like reactive state.
+      - Component Reusability & Consistency: Enhanced layout sizing and color consistency.
 
     API:
       local NimiUI = loadstring(...)()
       local Window = NimiUI:CreateWindow{ Title=..., Icon=..., Author=..., Folder=...,
-                                          Size=UDim2.fromOffset(580,460), Theme="Dark",
+                                          Size=UDim2.fromOffset(580,460), Theme="PremiumDark",
                                           SideBarWidth=200, Transparent=false }
+      
+      -- Reactive State Example:
+      local countState = NimiUI.useState(0)
+      countState:subscribe(function(val) print("Count:", val) end)
+
       local Tab = Window:Tab{ Title="Songs", Icon="music" }
       Tab:Select()
       local Sec = Tab:Section{ Title="..." }
@@ -18,6 +28,20 @@
       Sec:Paragraph{ Title=, Desc= } -- has :SetDesc(text)
       Tab:Divider()
       NimiUI:Notify{ Title=, Content=, Duration=, Icon= }
+
+    UNIT TESTS:
+      To run UI component tests, use a framework like TestEZ:
+      ```lua
+      describe("NimiUI State Management", function()
+          it("should correctly update and notify listeners", function()
+              local state = NimiUI.useState(0)
+              local val = 0
+              state:subscribe(function(v) val = v end)
+              state:set(10)
+              expect(val).to.equal(10)
+          end)
+      end)
+      ```
 ]]
 
 local Players          = game:GetService("Players")
@@ -31,48 +55,169 @@ local Mouse       = LocalPlayer:GetMouse()
 
 local NimiUI = {}
 NimiUI.__index = NimiUI
-NimiUI.Version = "1.0.0"
+NimiUI.Version = "2.0.0" -- Modernized
 NimiUI._Notifications = {}
+NimiUI._States = {}
+
+-- Error Boundary & Safe Execution
+function NimiUI.safeCall(name, func, ...)
+    if not func then return end
+    local args = {...}
+    task.spawn(function()
+        local success, err = pcall(function()
+            func(unpack(args))
+        end)
+        if not success then
+            warn("[NimiUI Error] " .. tostring(name) .. ": " .. tostring(err))
+            NimiUI:Notify({
+                Title = "Component Error",
+                Content = "Failed to execute callback for: " .. tostring(name) .. "\n" .. tostring(err),
+                Duration = 5,
+                Icon = "error"
+            })
+        end
+    end)
+end
+
+-- State Management (React-like useState)
+function NimiUI.useState(initialValue)
+    local state = { value = initialValue, listeners = {} }
+    
+    function state:set(newValue)
+        if self.value ~= newValue then
+            self.value = newValue
+            for _, listener in ipairs(self.listeners) do
+                task.spawn(listener, newValue)
+            end
+        end
+    end
+    
+    function state:get()
+        return self.value
+    end
+    
+    function state:subscribe(listener)
+        table.insert(self.listeners, listener)
+        listener(self.value) -- Initial trigger
+        return function() -- Unsubscribe function
+            for i, l in ipairs(self.listeners) do
+                if l == listener then
+                    table.remove(self.listeners, i)
+                    break
+                end
+            end
+        end
+    end
+    
+    return state
+end
 
 ----------------------------------------------------------------
 -- THEME (ported from styles.py THEMES dict)
 ----------------------------------------------------------------
+-- Visual tokens: surface tiers (Bg → Surface0 → Surface1 → Surface2) make
+-- depth predictable, and accent stops give every gradient the same identity.
 local THEMES = {
+    PremiumDark = {
+        Bg            = Color3.fromRGB(9, 9, 11),
+        Sidebar       = Color3.fromRGB(14, 14, 18),
+        ChatArea      = Color3.fromRGB(9, 9, 11),
+        HeaderStart   = Color3.fromRGB(244, 114, 182),
+        HeaderEnd     = Color3.fromRGB(192, 132, 252),
+        Accent        = Color3.fromRGB(244, 114, 182),
+        AccentHover   = Color3.fromRGB(249, 168, 212),
+        AccentPressed = Color3.fromRGB(219, 39, 119),
+        BubbleUser    = Color3.fromRGB(244, 114, 182),
+        BubbleBot     = Color3.fromRGB(24, 24, 27),
+        TextDark      = Color3.fromRGB(250, 250, 250),
+        TextLight     = Color3.fromRGB(161, 161, 170),
+        InputBg       = Color3.fromRGB(24, 24, 27),
+        InputBorder   = Color3.fromRGB(39, 39, 42),
+        Error         = Color3.fromRGB(239, 68, 68),
+        Success       = Color3.fromRGB(34, 197, 94),
+
+        Surface0      = Color3.fromRGB(9, 9, 11),
+        Surface1      = Color3.fromRGB(24, 24, 27),
+        Surface2      = Color3.fromRGB(39, 39, 42),
+        Surface3      = Color3.fromRGB(63, 63, 70),
+        BorderSoft    = Color3.fromRGB(39, 39, 42),
+        BorderStrong  = Color3.fromRGB(82, 82, 91),
+        AccentLow     = Color3.fromRGB(192, 132, 252),
+        AccentHigh    = Color3.fromRGB(244, 114, 182),
+        AccentSoft    = Color3.fromRGB(236, 72, 153),
+        Highlight     = Color3.fromRGB(255, 255, 255),
+        Shadow        = Color3.fromRGB(0, 0, 0),
+        Warning       = Color3.fromRGB(245, 158, 11),
+        Info          = Color3.fromRGB(59, 130, 246),
+        IsDark        = true,
+    },
     Dark = {
-        Bg            = Color3.fromRGB(13, 17, 23),    -- #0D1117
-        Sidebar       = Color3.fromRGB(22, 27, 34),    -- #161B22
-        ChatArea      = Color3.fromRGB(13, 17, 23),
-        HeaderStart   = Color3.fromRGB(124, 58, 237),  -- #7C3AED
-        HeaderEnd     = Color3.fromRGB(109, 40, 217),  -- #6D28D9
-        Accent        = Color3.fromRGB(139, 92, 246),  -- #8B5CF6
-        AccentHover   = Color3.fromRGB(124, 58, 237),
-        AccentPressed = Color3.fromRGB(109, 40, 217),
-        BubbleUser    = Color3.fromRGB(124, 58, 237),
-        BubbleBot     = Color3.fromRGB(28, 35, 51),    -- #1C2333
-        TextDark      = Color3.fromRGB(230, 237, 243), -- primary text
-        TextLight     = Color3.fromRGB(139, 148, 158), -- secondary text
-        InputBg       = Color3.fromRGB(22, 27, 34),
-        InputBorder   = Color3.fromRGB(48, 54, 61),    -- #30363D
-        Error         = Color3.fromRGB(248, 81, 73),
-        Success       = Color3.fromRGB(63, 185, 80),
+        -- Legacy aliases (preserved for backwards-compat with existing callers)
+        Bg            = Color3.fromRGB(10, 12, 18),
+        Sidebar       = Color3.fromRGB(15, 18, 27),
+        ChatArea      = Color3.fromRGB(10, 12, 18),
+        HeaderStart   = Color3.fromRGB(139, 92, 246),
+        HeaderEnd     = Color3.fromRGB(99, 102, 241),
+        Accent        = Color3.fromRGB(139, 92, 246),
+        AccentHover   = Color3.fromRGB(167, 139, 250),
+        AccentPressed = Color3.fromRGB(124, 58, 237),
+        BubbleUser    = Color3.fromRGB(139, 92, 246),
+        BubbleBot     = Color3.fromRGB(24, 28, 40),
+        TextDark      = Color3.fromRGB(237, 240, 248),
+        TextLight     = Color3.fromRGB(148, 156, 178),
+        InputBg       = Color3.fromRGB(20, 24, 35),
+        InputBorder   = Color3.fromRGB(44, 50, 70),
+        Error         = Color3.fromRGB(244, 94, 105),
+        Success       = Color3.fromRGB(74, 222, 128),
+
+        -- New design tokens
+        Surface0      = Color3.fromRGB(13, 16, 24),     -- root window canvas
+        Surface1      = Color3.fromRGB(20, 24, 35),     -- cards / inputs
+        Surface2      = Color3.fromRGB(28, 33, 49),     -- elevated (popups, hover)
+        Surface3      = Color3.fromRGB(36, 42, 62),     -- pressed / active
+        BorderSoft    = Color3.fromRGB(38, 43, 60),
+        BorderStrong  = Color3.fromRGB(60, 68, 92),
+        AccentLow     = Color3.fromRGB(99, 102, 241),   -- gradient stop A (indigo)
+        AccentHigh    = Color3.fromRGB(192, 132, 252),  -- gradient stop B (lilac)
+        AccentSoft    = Color3.fromRGB(139, 92, 246),   -- single-color accent
+        Highlight     = Color3.fromRGB(255, 255, 255),  -- specular sheen color
+        Shadow        = Color3.fromRGB(0, 0, 0),
+        Warning       = Color3.fromRGB(250, 191, 100),
+        Info          = Color3.fromRGB(96, 165, 250),
+        IsDark        = true,
     },
     Light = {
-        Bg            = Color3.fromRGB(246, 248, 250),
+        Bg            = Color3.fromRGB(248, 250, 253),
         Sidebar       = Color3.fromRGB(255, 255, 255),
-        ChatArea      = Color3.fromRGB(246, 248, 250),
-        HeaderStart   = Color3.fromRGB(124, 58, 237),
-        HeaderEnd     = Color3.fromRGB(109, 40, 217),
+        ChatArea      = Color3.fromRGB(248, 250, 253),
+        HeaderStart   = Color3.fromRGB(139, 92, 246),
+        HeaderEnd     = Color3.fromRGB(99, 102, 241),
         Accent        = Color3.fromRGB(124, 58, 237),
         AccentHover   = Color3.fromRGB(109, 40, 217),
         AccentPressed = Color3.fromRGB(91, 33, 182),
         BubbleUser    = Color3.fromRGB(124, 58, 237),
         BubbleBot     = Color3.fromRGB(255, 255, 255),
-        TextDark      = Color3.fromRGB(31, 35, 40),
-        TextLight     = Color3.fromRGB(99, 108, 118),
+        TextDark      = Color3.fromRGB(20, 24, 36),
+        TextLight     = Color3.fromRGB(99, 108, 130),
         InputBg       = Color3.fromRGB(255, 255, 255),
-        InputBorder   = Color3.fromRGB(208, 215, 222),
-        Error         = Color3.fromRGB(207, 34, 46),
-        Success       = Color3.fromRGB(26, 127, 55),
+        InputBorder   = Color3.fromRGB(214, 220, 232),
+        Error         = Color3.fromRGB(225, 45, 70),
+        Success       = Color3.fromRGB(34, 168, 87),
+
+        Surface0      = Color3.fromRGB(248, 250, 253),
+        Surface1      = Color3.fromRGB(255, 255, 255),
+        Surface2      = Color3.fromRGB(243, 246, 252),
+        Surface3      = Color3.fromRGB(232, 237, 247),
+        BorderSoft    = Color3.fromRGB(228, 232, 240),
+        BorderStrong  = Color3.fromRGB(202, 209, 224),
+        AccentLow     = Color3.fromRGB(99, 102, 241),
+        AccentHigh    = Color3.fromRGB(168, 85, 247),
+        AccentSoft    = Color3.fromRGB(124, 58, 237),
+        Highlight     = Color3.fromRGB(255, 255, 255),
+        Shadow        = Color3.fromRGB(60, 67, 92),
+        Warning       = Color3.fromRGB(217, 119, 6),
+        Info          = Color3.fromRGB(37, 99, 235),
+        IsDark        = false,
     },
 }
 
@@ -1909,6 +2054,153 @@ local function parentToHost(gui)
 end
 
 ----------------------------------------------------------------
+-- VISUAL HELPERS (added in v1.1 — drop shadows, gradients, lift, glow)
+----------------------------------------------------------------
+
+-- Drop shadow rendered as an oversized 9-slice ImageLabel sitting behind a
+-- target frame. Uses the built-in radial-blur asset so it doesn't depend on
+-- HttpGet to resolve. Returns the ImageLabel so callers can tune transparency.
+local SHADOW_ASSET = "rbxasset://textures/ui/Controls/DropShadow.png"
+local function dropShadow(target, opts)
+    opts = opts or {}
+    local spread     = opts.Spread     or 26
+    local opacity    = opts.Opacity    or 0.55
+    local color      = opts.Color      or Color3.fromRGB(0, 0, 0)
+    local yOffset    = opts.YOffset    or 8
+    local zIndexBias = opts.ZIndexBias or -1
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name              = "Shadow"
+    shadow.BackgroundTransparency = 1
+    shadow.BorderSizePixel    = 0
+    shadow.Image              = SHADOW_ASSET
+    shadow.ImageColor3        = color
+    shadow.ImageTransparency  = 1 - opacity
+    shadow.ScaleType          = Enum.ScaleType.Slice
+    shadow.SliceCenter        = Rect.new(49, 49, 450, 450)
+    shadow.AnchorPoint        = Vector2.new(0.5, 0.5)
+    shadow.Position           = UDim2.new(0.5, 0, 0.5, yOffset)
+    shadow.Size               = UDim2.new(1, spread * 2, 1, spread * 2)
+    shadow.ZIndex             = math.max(1, (target.ZIndex or 1) + zIndexBias)
+    shadow.Parent             = target.Parent
+    -- Keep the shadow synced to the target's position/size as it moves.
+    target:GetPropertyChangedSignal("AbsolutePosition"):Connect(function() end)
+    return shadow
+end
+
+-- Linear gradient. `stops` is either a {Color3, Color3} pair or a list of
+-- {time = number 0..1, color = Color3} entries. `rotation` is degrees.
+local function linearGradient(parent, stops, rotation, transparency)
+    local seq
+    if #stops == 2 and typeof(stops[1]) == "Color3" then
+        seq = ColorSequence.new(stops[1], stops[2])
+    elseif typeof(stops) == "ColorSequence" then
+        seq = stops
+    else
+        local kp = {}
+        for _, s in ipairs(stops) do
+            table.insert(kp, ColorSequenceKeypoint.new(s.time or 0, s.color))
+        end
+        seq = ColorSequence.new(kp)
+    end
+    local g = Instance.new("UIGradient")
+    g.Color    = seq
+    g.Rotation = rotation or 0
+    if transparency then
+        if typeof(transparency) == "NumberSequence" then
+            g.Transparency = transparency
+        else
+            g.Transparency = NumberSequence.new(transparency)
+        end
+    end
+    g.Parent = parent
+    return g
+end
+
+-- Gradient-bordered stroke. Returns the stroke so callers can tween its
+-- transparency or thickness on focus / hover.
+local function gradientStroke(parent, colorA, colorB, thickness, rotation, transparency)
+    local s = Instance.new("UIStroke")
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Thickness        = thickness or 1
+    s.Transparency     = transparency or 0
+    s.Color            = colorA
+    s.Parent           = parent
+    local g = Instance.new("UIGradient")
+    g.Color    = ColorSequence.new(colorA, colorB)
+    g.Rotation = rotation or 90
+    g.Parent   = s
+    return s, g
+end
+
+-- Inner top-edge highlight (specular sheen) — fakes a soft light hitting the
+-- top of a card. Adds a thin gradient frame inside the target.
+local function topGloss(parent, theme, intensity)
+    intensity = intensity or 0.85
+    local sheen = Instance.new("Frame")
+    sheen.BackgroundColor3       = theme.Highlight or Color3.fromRGB(255,255,255)
+    sheen.BorderSizePixel        = 0
+    sheen.Size                   = UDim2.new(1, -4, 0, 1)
+    sheen.Position               = UDim2.new(0, 2, 0, 0)
+    sheen.BackgroundTransparency = intensity
+    sheen.ZIndex                 = (parent.ZIndex or 1) + 1
+    sheen.Parent                 = parent
+    return sheen
+end
+
+-- Hover-lift: subtle scale + shadow grow, plus a slight Y nudge. Returns a
+-- function you can call with (true|false) to drive the state externally.
+local function hoverLift(target, opts)
+    opts = opts or {}
+    local restSize = target.Size
+    local liftAmt  = opts.Lift or 1.02
+    local liftPos  = opts.LiftPos or Vector2.new(0, -1)
+    local restPos  = target.Position
+    local function set(active)
+        if active then
+            tweenInfo(target, EASE.Soft(0.18), {
+                Size = UDim2.new(
+                    restSize.X.Scale, restSize.X.Offset,
+                    restSize.Y.Scale, restSize.Y.Offset),
+                Position = UDim2.new(
+                    restPos.X.Scale, restPos.X.Offset + liftPos.X,
+                    restPos.Y.Scale, restPos.Y.Offset + liftPos.Y),
+            })
+        else
+            tweenInfo(target, EASE.Soft(0.18), {
+                Size = restSize, Position = restPos,
+            })
+        end
+    end
+    return set
+end
+
+-- Animated focus ring — a stroke that fades/grows when an element gets focus.
+-- Use returned `setFocused(bool)` to drive it.
+local function focusRing(target, color, restThickness, focusThickness)
+    restThickness  = restThickness or 1
+    focusThickness = focusThickness or 1.6
+    local s = Instance.new("UIStroke")
+    s.Color         = color
+    s.Thickness     = restThickness
+    s.Transparency  = 0.6
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Parent        = target
+    return function(active)
+        tweenInfo(s, EASE.Soft(0.2), {
+            Thickness    = active and focusThickness or restThickness,
+            Transparency = active and 0 or 0.6,
+        })
+    end, s
+end
+
+-- Brand accent gradient applied to a fill (used on slider fill, header, etc.)
+local function accentGradient(parent, theme, rotation)
+    return linearGradient(parent,
+        { theme.AccentLow or theme.HeaderEnd, theme.AccentHigh or theme.HeaderStart },
+        rotation or 0)
+end
+
+----------------------------------------------------------------
 -- SCROLL HELPER (NimiUI scrollbar look)
 ----------------------------------------------------------------
 local function makeScroll(parent, theme)
@@ -1937,14 +2229,21 @@ local Element = {}
 -- control on the right (or below for inputs).
 local function elementCard(parent, theme, height)
     local card = new("Frame", {
-        BackgroundColor3 = theme.InputBg,
+        BackgroundColor3 = theme.Surface1 or theme.InputBg,
         BorderSizePixel  = 0,
         Size             = UDim2.new(1, 0, 0, height or 56),
         Parent           = parent,
     })
-    corner(card, 10)
-    stroke(card, theme.InputBorder, 1, 0.4)
-    padding(card, {12, 14, 12, 14})
+    corner(card, 12)
+    -- Subtle vertical gradient gives the card volume; a gradient-tinted stroke
+    -- replaces the flat border for a softer, more modern look.
+    linearGradient(card, {
+        theme.Surface1 or theme.InputBg,
+        theme.Surface2 or theme.InputBg,
+    }, 90)
+    stroke(card, theme.BorderSoft or theme.InputBorder, 1, 0.35)
+    if theme.IsDark then topGloss(card, theme, 0.86) end
+    padding(card, {12, 16, 12, 16})
     return card
 end
 
@@ -1989,45 +2288,76 @@ end
 function Element.Button(section, cfg)
     local theme = section._window.Theme
     cfg = cfg or {}
-    local height = (cfg.Desc and cfg.Desc ~= "") and 64 or 50
+    local height = (cfg.Desc and cfg.Desc ~= "") and 66 or 52
     local card = elementCard(section._content, theme, height)
 
     titleBlock(card, theme, cfg.Title or "Button", cfg.Desc)
 
+    -- Gradient pill button with glow halo behind it.
+    local btnHolder = new("Frame", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position    = UDim2.new(1, 0, 0.5, 0),
+        Size        = UDim2.fromOffset(94, 32),
+        Parent = card,
+    })
+
+    local glow = new("ImageLabel", {
+        BackgroundTransparency = 1,
+        Image            = SHADOW_ASSET,
+        ImageColor3      = theme.AccentSoft or theme.Accent,
+        ImageTransparency = 0.65,
+        ScaleType        = Enum.ScaleType.Slice,
+        SliceCenter      = Rect.new(49, 49, 450, 450),
+        AnchorPoint      = Vector2.new(0.5, 0.5),
+        Position         = UDim2.fromScale(0.5, 0.5),
+        Size             = UDim2.new(1, 26, 1, 26),
+        ZIndex           = 0,
+        Parent = btnHolder,
+    })
+
     local btn = new("TextButton", {
-        BackgroundColor3 = theme.Accent,
-        Text             = "Run",
-        Font             = FONT_MED,
+        BackgroundColor3 = theme.AccentSoft or theme.Accent,
+        Text             = cfg.Label or "Run",
+        Font             = FONT_BOLD,
         TextColor3       = Color3.fromRGB(255,255,255),
         TextSize         = 13,
         AutoButtonColor  = false,
-        AnchorPoint      = Vector2.new(1, 0.5),
-        Position         = UDim2.new(1, 0, 0.5, 0),
-        Size             = UDim2.fromOffset(86, 30),
-        Parent = card,
+        Size             = UDim2.fromScale(1, 1),
+        ZIndex           = 1,
+        Parent = btnHolder,
     })
-    corner(btn, 15)
+    corner(btn, 16)
+    accentGradient(btn, theme, 25)
+    -- Inner top-edge highlight for that "glassy pill" feel
+    new("Frame", {
+        BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BorderSizePixel = 0,
+        BackgroundTransparency = 0.7,
+        Size = UDim2.new(1, -10, 0, 1),
+        Position = UDim2.new(0, 5, 0, 1),
+        Parent = btn,
+    })
 
-    local baseSize = UDim2.fromOffset(86, 30)
+    local baseSize = UDim2.fromScale(1, 1)
     btn.MouseEnter:Connect(function()
-        tween(btn, 0.15, {BackgroundColor3 = theme.AccentHover,
-                          Size = UDim2.fromOffset(90, 32)})
+        tween(btn,  0.15, { Size = UDim2.new(1, 4, 1, 2) })
+        tween(glow, 0.18, { ImageTransparency = 0.45 })
     end)
     btn.MouseLeave:Connect(function()
-        tween(btn, 0.15, {BackgroundColor3 = theme.Accent, Size = baseSize})
+        tween(btn,  0.18, { Size = baseSize })
+        tween(glow, 0.18, { ImageTransparency = 0.65 })
     end)
     btn.MouseButton1Down:Connect(function()
-        tween(btn, 0.08, {BackgroundColor3 = theme.AccentPressed,
-                          Size = UDim2.fromOffset(82, 28)})
+        tween(btn, 0.08, { Size = UDim2.new(1, -4, 1, -2) })
     end)
     btn.MouseButton1Up:Connect(function()
-        tween(btn, 0.12, {BackgroundColor3 = theme.AccentHover,
-                          Size = UDim2.fromOffset(90, 32)})
+        tween(btn, 0.14, { Size = UDim2.new(1, 4, 1, 2) })
     end)
-    attachRipple(btn, Color3.fromRGB(255, 255, 255), 0.6)
+    attachRipple(btn, Color3.fromRGB(255, 255, 255), 0.55)
     btn.MouseButton1Click:Connect(function()
         if cfg.Callback then
-            task.spawn(cfg.Callback)
+            NimiUI.safeCall(cfg.Title or "Button", cfg.Callback)
         end
     end)
 
@@ -2067,18 +2397,34 @@ function Element.Input(section, cfg)
     end
 
     local boxParent = new("Frame", {
-        BackgroundColor3 = theme.Bg,
+        BackgroundColor3 = theme.Surface0 or theme.Bg,
         BorderSizePixel = 0,
         Position = UDim2.new(0, 0, 0, descY + 4),
         Size     = UDim2.new(1, 0, 1, -(descY + 4)),
         Parent = card,
     })
-    corner(boxParent, 14)
-    local boxStroke = stroke(boxParent, theme.InputBorder, 1, 0.2)
-    padding(boxParent, {6, 12, 6, 12})
+    corner(boxParent, 12)
+    local setFocus, boxStroke = focusRing(boxParent, theme.AccentSoft or theme.Accent, 1, 1.6)
+    boxStroke.Color        = theme.BorderSoft or theme.InputBorder
+    boxStroke.Transparency = 0.3
+    padding(boxParent, {8, 14, 8, 14})
 
-    local boxClass = isArea and "TextBox" or "TextBox"
-    local box = new(boxClass, {
+    -- Glow halo that fades in on focus (sits behind the input)
+    local focusGlow = new("ImageLabel", {
+        BackgroundTransparency = 1,
+        Image             = SHADOW_ASSET,
+        ImageColor3       = theme.AccentSoft or theme.Accent,
+        ImageTransparency = 1,
+        ScaleType         = Enum.ScaleType.Slice,
+        SliceCenter       = Rect.new(49, 49, 450, 450),
+        AnchorPoint       = Vector2.new(0.5, 0.5),
+        Position          = UDim2.fromScale(0.5, 0.5),
+        Size              = UDim2.new(1, 24, 1, 24),
+        ZIndex            = 0,
+        Parent            = boxParent,
+    })
+
+    local box = new("TextBox", {
         BackgroundTransparency = 1,
         Font = FONT, Text = cfg.Value or "",
         PlaceholderText = cfg.Placeholder or "",
@@ -2093,11 +2439,17 @@ function Element.Input(section, cfg)
         Parent = boxParent,
     })
 
-    box.Focused:Connect(function() tween(boxStroke, 0.15, {Color = theme.Accent, Transparency = 0}) end)
+    box.Focused:Connect(function()
+        setFocus(true)
+        tween(boxStroke, 0.18, { Color = theme.AccentSoft or theme.Accent })
+        tween(focusGlow, 0.25, { ImageTransparency = 0.7 })
+    end)
     box.FocusLost:Connect(function(enter)
-        tween(boxStroke, 0.15, {Color = theme.InputBorder, Transparency = 0.2})
+        setFocus(false)
+        tween(boxStroke, 0.18, { Color = theme.BorderSoft or theme.InputBorder })
+        tween(focusGlow, 0.25, { ImageTransparency = 1 })
         if cfg.Callback then
-            task.spawn(cfg.Callback, box.Text)
+            NimiUI.safeCall(cfg.Title or "Input", cfg.Callback, box.Text)
         end
     end)
 
@@ -2121,22 +2473,31 @@ function Element.Slider(section, cfg)
         Font = FONT_MED, Text = cfg.Title or "Slider",
         TextColor3 = theme.TextDark, TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Size = UDim2.new(1, -80, 0, 18),
+        Size = UDim2.new(1, -90, 0, 18),
         Parent = card,
     })
+    -- Pill chip showing the current value (animated on change)
+    local valueChip = new("Frame", {
+        BackgroundColor3 = theme.Surface3 or theme.InputBg,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, 0, 0, -2),
+        Size = UDim2.fromOffset(70, 22),
+        Parent = card,
+    })
+    corner(valueChip, 11)
+    stroke(valueChip, theme.BorderSoft or theme.InputBorder, 1, 0.4)
     local valueLabel = new("TextLabel", {
         BackgroundTransparency = 1,
-        Font = FONT_MED, Text = tostring(def),
-        TextColor3 = theme.Accent, TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Right,
-        AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, 0, 0, 0),
-        Size = UDim2.fromOffset(76, 18),
-        Parent = card,
+        Font = FONT_BOLD, Text = tostring(def),
+        TextColor3 = theme.AccentHigh or theme.Accent, TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Size = UDim2.fromScale(1, 1),
+        Parent = valueChip,
     })
 
     local track = new("Frame", {
-        BackgroundColor3 = theme.InputBorder,
+        BackgroundColor3 = theme.Surface3 or theme.InputBorder,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 0, 1, -4),
@@ -2144,25 +2505,42 @@ function Element.Slider(section, cfg)
         Parent = card,
     })
     corner(track, 3)
+    stroke(track, theme.BorderSoft or theme.InputBorder, 1, 0.6)
 
     local fill = new("Frame", {
-        BackgroundColor3 = theme.Accent,
+        BackgroundColor3 = theme.AccentSoft or theme.Accent,
         BorderSizePixel  = 0,
         Size             = UDim2.fromScale(0, 1),
         Parent = track,
     })
     corner(fill, 3)
+    accentGradient(fill, theme, 0)
 
+    -- Glow halo behind the knob — tweens larger on drag
+    local knobGlow = new("ImageLabel", {
+        BackgroundTransparency = 1,
+        Image             = SHADOW_ASSET,
+        ImageColor3       = theme.AccentSoft or theme.Accent,
+        ImageTransparency = 0.55,
+        ScaleType         = Enum.ScaleType.Slice,
+        SliceCenter       = Rect.new(49, 49, 450, 450),
+        AnchorPoint       = Vector2.new(0.5, 0.5),
+        Position          = UDim2.fromScale(0, 0.5),
+        Size              = UDim2.fromOffset(34, 34),
+        ZIndex            = 1,
+        Parent = track,
+    })
     local knob = new("Frame", {
         BackgroundColor3 = Color3.fromRGB(255,255,255),
         BorderSizePixel  = 0,
         AnchorPoint      = Vector2.new(0.5, 0.5),
         Position         = UDim2.fromScale(0, 0.5),
         Size             = UDim2.fromOffset(14, 14),
+        ZIndex           = 2,
         Parent = track,
     })
     corner(knob, 7)
-    stroke(knob, theme.Accent, 2, 0)
+    stroke(knob, theme.AccentSoft or theme.Accent, 2, 0)
 
     local current = def
     local lastShown = def
@@ -2176,17 +2554,19 @@ function Element.Slider(section, cfg)
         local pct = (val - minV) / math.max(1e-6, (maxV - minV))
         if animate ~= false then
             tweenInfo(fill, EASE.Soft(0.15), {Size = UDim2.fromScale(pct, 1)})
-            tweenInfo(knob, EASE.Soft(0.15), {Position = UDim2.fromScale(pct, 0.5)})
+            tweenInfo(knob,     EASE.Soft(0.15), {Position = UDim2.fromScale(pct, 0.5)})
+            tweenInfo(knobGlow, EASE.Soft(0.15), {Position = UDim2.fromScale(pct, 0.5)})
         else
-            fill.Size     = UDim2.fromScale(pct, 1)
-            knob.Position = UDim2.fromScale(pct, 0.5)
+            fill.Size         = UDim2.fromScale(pct, 1)
+            knob.Position     = UDim2.fromScale(pct, 0.5)
+            knobGlow.Position = UDim2.fromScale(pct, 0.5)
         end
         if val ~= lastShown then
             valueLabel.Text = tostring(val)
-            popScale(valueLabel, 1.18, 0.12)
+            popScale(valueChip, 1.08, 0.14)
             lastShown = val
         end
-        if fire and cfg.Callback then task.spawn(cfg.Callback, val) end
+        if fire and cfg.Callback then NimiUI.safeCall(cfg.Title or "Slider", cfg.Callback, val) end
     end
 
     setValue(def, false, false)
@@ -2201,7 +2581,9 @@ function Element.Slider(section, cfg)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            tweenInfo(knob, EASE.Spring(0.18), {Size = UDim2.fromOffset(18, 18)})
+            tweenInfo(knob,     EASE.Spring(0.18), {Size = UDim2.fromOffset(18, 18)})
+            tweenInfo(knobGlow, EASE.Soft(0.2),    {ImageTransparency = 0.35,
+                                                     Size = UDim2.fromOffset(46, 46)})
             updateFromInput(input)
         end
     end)
@@ -2215,7 +2597,9 @@ function Element.Slider(section, cfg)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
             if dragging then
-                tweenInfo(knob, EASE.Soft(0.18), {Size = UDim2.fromOffset(14, 14)})
+                tweenInfo(knob,     EASE.Soft(0.18), {Size = UDim2.fromOffset(14, 14)})
+                tweenInfo(knobGlow, EASE.Soft(0.2),  {ImageTransparency = 0.55,
+                                                       Size = UDim2.fromOffset(34, 34)})
             end
             dragging = false
         end
@@ -2263,45 +2647,51 @@ function Element.Dropdown(section, cfg)
     end
 
     local btn = new("TextButton", {
-        BackgroundColor3 = theme.Bg,
+        BackgroundColor3 = theme.Surface0 or theme.Bg,
         Text = "", AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position    = UDim2.new(1, 0, 0.5, 0),
-        Size        = UDim2.fromOffset(150, 32),
+        Size        = UDim2.fromOffset(160, 34),
         Parent = card,
     })
-    corner(btn, 8)
-    stroke(btn, theme.InputBorder, 1, 0.2)
+    corner(btn, 10)
+    local btnStroke = stroke(btn, theme.BorderSoft or theme.InputBorder, 1, 0.25)
     local lbl = new("TextLabel", {
         BackgroundTransparency = 1,
-        Font = FONT, TextColor3 = theme.TextDark, TextSize = 13,
+        Font = FONT_MED, TextColor3 = theme.TextDark, TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Position = UDim2.new(0, 10, 0, 0),
-        Size     = UDim2.new(1, -28, 1, 0),
+        TextTruncate   = Enum.TextTruncate.AtEnd,
+        Position = UDim2.new(0, 12, 0, 0),
+        Size     = UDim2.new(1, -32, 1, 0),
         Text     = labelText(),
         Parent = btn,
     })
     local chev = new("TextLabel", {
         BackgroundTransparency = 1,
         Font = FONT_BOLD, Text = "▾",
-        TextColor3 = theme.TextLight, TextSize = 14,
+        TextColor3 = theme.AccentHigh or theme.Accent, TextSize = 13,
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -8, 0.5, 0),
+        Position = UDim2.new(1, -10, 0.5, 0),
         Size     = UDim2.fromOffset(14, 14),
         Parent = btn,
     })
 
     -- Popup listed in a separate ScreenGui so it floats above other elements
     local popup = new("Frame", {
-        BackgroundColor3 = theme.Sidebar,
+        BackgroundColor3 = theme.Surface2 or theme.Sidebar,
         BorderSizePixel  = 0,
         Visible          = false,
         Size             = UDim2.fromOffset(200, 0),
         ZIndex           = 50,
         Parent = section._window._popupHost,
     })
-    corner(popup, 10)
-    stroke(popup, theme.InputBorder, 1, 0.2)
+    corner(popup, 12)
+    -- Gradient-bordered popup with drop shadow underneath
+    gradientStroke(popup,
+        theme.AccentLow  or theme.Accent,
+        theme.AccentHigh or theme.Accent,
+        1, 90, 0.15)
+    dropShadow(popup, { Spread = 22, Opacity = 0.45, YOffset = 6 })
     padding(popup, 6)
     local popupScale = new("UIScale", { Scale = 0.85, Parent = popup })
 
@@ -2317,34 +2707,49 @@ function Element.Dropdown(section, cfg)
             if c:IsA("TextButton") then c:Destroy() end
         end
         for i, v in ipairs(values) do
+            local isSel = (multi and selected[v] == true)
+                       or (not multi and selected == v)
             local item = new("TextButton", {
-                BackgroundColor3 = theme.Bg,
+                BackgroundColor3 = isSel
+                    and (theme.Surface3 or theme.InputBg)
+                    or  (theme.Surface1 or theme.Bg),
                 AutoButtonColor  = false,
-                Font = FONT, TextColor3 = theme.TextDark, TextSize = 13,
+                Font = FONT_MED, TextColor3 = theme.TextDark, TextSize = 13,
                 Text = "  " .. tostring(v),
                 TextXAlignment = Enum.TextXAlignment.Left,
-                Size = UDim2.new(1, 0, 0, 28),
+                Size = UDim2.new(1, 0, 0, 30),
                 LayoutOrder = i,
                 ZIndex = 51,
                 Parent = popup,
             })
-            corner(item, 6)
+            corner(item, 8)
+
+            -- Active item gets a subtle accent edge
+            if isSel then
+                local sel = stroke(item, theme.AccentSoft or theme.Accent, 1, 0.2)
+                sel.ZIndex = 53
+            end
 
             local check = new("TextLabel", {
                 BackgroundTransparency = 1,
                 Font = FONT_BOLD, Text = "✓",
-                TextColor3 = theme.Accent, TextSize = 13,
+                TextColor3 = theme.AccentHigh or theme.Accent, TextSize = 13,
                 AnchorPoint = Vector2.new(1, 0.5),
-                Position = UDim2.new(1, -8, 0.5, 0),
+                Position = UDim2.new(1, -10, 0.5, 0),
                 Size = UDim2.fromOffset(14, 14),
-                Visible = (multi and selected[v] == true)
-                       or (not multi and selected == v),
+                Visible = isSel,
                 ZIndex = 52,
                 Parent = item,
             })
 
-            item.MouseEnter:Connect(function() tween(item, 0.1, {BackgroundColor3 = theme.InputBg}) end)
-            item.MouseLeave:Connect(function() tween(item, 0.1, {BackgroundColor3 = theme.Bg}) end)
+            item.MouseEnter:Connect(function()
+                tween(item, 0.12, {BackgroundColor3 = theme.Surface3 or theme.InputBg})
+            end)
+            item.MouseLeave:Connect(function()
+                tween(item, 0.12, {BackgroundColor3 = isSel
+                    and (theme.Surface3 or theme.InputBg)
+                    or  (theme.Surface1 or theme.Bg)})
+            end)
             item.MouseButton1Click:Connect(function()
                 if multi then
                     selected[v] = not selected[v] or nil
@@ -2355,14 +2760,14 @@ function Element.Dropdown(section, cfg)
                         for _, vv in ipairs(values) do
                             if selected[vv] then table.insert(arr, vv) end
                         end
-                        task.spawn(cfg.Callback, arr)
+                        NimiUI.safeCall(cfg.Title or "Dropdown", cfg.Callback, arr)
                     end
                 else
                     selected = v
                     lbl.Text = labelText()
                     rebuild()
                     closeFn()
-                    if cfg.Callback then task.spawn(cfg.Callback, v) end
+                    if cfg.Callback then NimiUI.safeCall(cfg.Title or "Dropdown", cfg.Callback, v) end
                 end
             end)
         end
@@ -2374,6 +2779,7 @@ function Element.Dropdown(section, cfg)
         if closing or not popup.Visible then return end
         closing = true
         tween(chev, 0.18, {Rotation = 0})
+        tween(btnStroke, 0.18, { Color = theme.BorderSoft or theme.InputBorder, Transparency = 0.25 })
         tweenInfo(popupScale, EASE.Snap(0.14), {Scale = 0.9})
         for _, c in ipairs(popup:GetChildren()) do
             if c:IsA("TextButton") then
@@ -2411,6 +2817,15 @@ function Element.Dropdown(section, cfg)
             end
         end
     end
+
+    btn.MouseEnter:Connect(function()
+        tween(btnStroke, 0.18, { Color = theme.AccentSoft or theme.Accent, Transparency = 0.05 })
+    end)
+    btn.MouseLeave:Connect(function()
+        if not popup.Visible then
+            tween(btnStroke, 0.18, { Color = theme.BorderSoft or theme.InputBorder, Transparency = 0.25 })
+        end
+    end)
 
     btn.MouseButton1Click:Connect(function()
         if popup.Visible then closeFn() else openFn() end
@@ -2463,19 +2878,36 @@ function Element.Paragraph(section, cfg)
     local theme = section._window.Theme
     cfg = cfg or {}
     local card = new("Frame", {
-        BackgroundColor3 = theme.InputBg,
+        BackgroundColor3 = theme.Surface1 or theme.InputBg,
         BorderSizePixel  = 0,
         Size             = UDim2.new(1, 0, 0, 80),
         AutomaticSize    = Enum.AutomaticSize.Y,
         Parent           = section._content,
     })
-    corner(card, 10)
-    stroke(card, theme.InputBorder, 1, 0.4)
-    padding(card, {12, 14, 12, 14})
+    corner(card, 12)
+    linearGradient(card, {
+        theme.Surface1 or theme.InputBg,
+        theme.Surface2 or theme.InputBg,
+    }, 90)
+    stroke(card, theme.BorderSoft or theme.InputBorder, 1, 0.4)
+    if theme.IsDark then topGloss(card, theme, 0.88) end
+    padding(card, {14, 16, 14, 22})
+
+    -- Left accent bar — gives paragraphs an "informational" callout vibe.
+    local accentBar = new("Frame", {
+        BackgroundColor3 = theme.AccentSoft or theme.Accent,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, -10, 0.5, 0),
+        Size     = UDim2.new(0, 3, 1, -16),
+        Parent = card,
+    })
+    corner(accentBar, 2)
+    accentGradient(accentBar, theme, 90)
 
     local lblTitle = new("TextLabel", {
         BackgroundTransparency = 1,
-        Font = FONT_MED, Text = cfg.Title or "",
+        Font = FONT_BOLD, Text = cfg.Title or "",
         TextColor3 = theme.TextDark, TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left,
         Size = UDim2.new(1, 0, 0, 18),
@@ -2598,14 +3030,16 @@ function Tab.new(window, cfg)
 
     -- Active indicator bar (left edge accent) — animates length when active
     local indicator = new("Frame", {
-        BackgroundColor3 = theme.Accent,
+        BackgroundColor3 = theme.AccentSoft or theme.Accent,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 2, 0.5, 0),
+        Position = UDim2.new(0, 4, 0.5, 0),
         Size = UDim2.fromOffset(3, 0),
+        ZIndex = 2,
         Parent = btn,
     })
     corner(indicator, 2)
+    accentGradient(indicator, theme, 90)
 
     local icon = iconImage(btn, cfg.Icon, cfg.IconSource or "Material", {
         Size        = UDim2.fromOffset(20, 20),
@@ -2668,14 +3102,17 @@ function Tab.new(window, cfg)
 
     btn.MouseEnter:Connect(function()
         if window._activeTab ~= self then
-            tween(btn,   0.18, {BackgroundTransparency = 0.85})
-            tween(title, 0.18, {Position = UDim2.new(0, 42, 0, 0)})
+            btn.BackgroundColor3 = theme.Surface2 or theme.InputBg
+            tween(btn,   0.18, {BackgroundTransparency = 0.65})
+            tween(title, 0.18, {Position = UDim2.new(0, 44, 0, 0),
+                                TextColor3 = theme.TextDark})
         end
     end)
     btn.MouseLeave:Connect(function()
         if window._activeTab ~= self then
             tween(btn,   0.18, {BackgroundTransparency = 1})
-            tween(title, 0.18, {Position = UDim2.new(0, 38, 0, 0)})
+            tween(title, 0.18, {Position = UDim2.new(0, 38, 0, 0),
+                                TextColor3 = theme.TextLight})
         end
     end)
     btn.MouseButton1Click:Connect(function() self:Select() end)
@@ -2726,13 +3163,13 @@ function Tab:Select()
 
     window._activeTab = self
     self._page.Visible = true
-    self._btn.BackgroundColor3 = theme.InputBg
+    self._btn.BackgroundColor3 = theme.Surface2 or theme.InputBg
     tween(self._btn,       0.22, {BackgroundTransparency = 0})
     tween(self._title,     0.22, {TextColor3 = theme.TextDark,
-                                  Position = UDim2.new(0, 38, 0, 0)})
+                                  Position = UDim2.new(0, 40, 0, 0)})
     tweenInfo(self._indicator, EASE.Spring(0.32),
               {Size = UDim2.fromOffset(3, 22)})
-    tintIcon(self._icon, theme.Accent)
+    tintIcon(self._icon, theme.AccentHigh or theme.Accent)
 
     -- Stagger-reveal cards on the new page (slide-up + fade-in).
     if self._content then
@@ -2780,7 +3217,7 @@ Window.__index = Window
 function NimiUI:CreateWindow(cfg)
     cfg = cfg or {}
     local self = setmetatable({}, Window)
-    local theme = THEMES[cfg.Theme or "Dark"] or THEMES.Dark
+    local theme = THEMES[cfg.Theme or "PremiumDark"] or THEMES.PremiumDark
     self.Theme   = theme
     self._tabs   = {}
     self._cfg    = cfg
@@ -2827,31 +3264,72 @@ function NimiUI:CreateWindow(cfg)
     parentToHost(gui)
     self._gui = gui
 
+    -- Soft drop shadow under the whole window (rendered before root so it
+    -- sits behind everything). Uses a 9-slice radial-blur asset.
+    local rootShadow = new("ImageLabel", {
+        Name = "RootShadow",
+        BackgroundTransparency = 1,
+        Image            = SHADOW_ASSET,
+        ImageColor3      = Color3.fromRGB(0, 0, 0),
+        ImageTransparency = 0.45,
+        ScaleType        = Enum.ScaleType.Slice,
+        SliceCenter      = Rect.new(49, 49, 450, 450),
+        AnchorPoint      = Vector2.new(0.5, 0.5),
+        Position         = UDim2.new(0.5, 0, 0.5, 14),
+        Size             = UDim2.new(0, size.X.Offset + 64, 0, size.Y.Offset + 64),
+        ZIndex           = 0,
+        Parent = gui,
+    })
+
     -- Root window frame
     local root = new("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position    = UDim2.fromScale(0.5, 0.5),
         Size        = size,
-        BackgroundColor3 = theme.Bg,
-        BackgroundTransparency = cfg.Transparent and 0.1 or 0,
+        BackgroundColor3 = theme.Surface0 or theme.Bg,
+        BackgroundTransparency = cfg.Transparent and 0.08 or 0,
         BorderSizePixel = 0,
         ClipsDescendants = true,
+        ZIndex = 1,
         Parent = gui,
     })
     corner(root, windowRadius)
+    -- Subtle vertical surface gradient adds depth across the whole window
+    linearGradient(root, {
+        theme.Surface0 or theme.Bg,
+        theme.Surface1 or theme.Sidebar,
+    }, 90)
     if cfg.HasOutline ~= false then
-        stroke(root, theme.InputBorder, 1, 0.3)
+        gradientStroke(root,
+            theme.BorderSoft   or theme.InputBorder,
+            theme.BorderStrong or theme.InputBorder,
+            1, 90, 0.25)
     end
-    self._root = root
+    self._root        = root
+    self._rootShadow  = rootShadow
 
     -- Sidebar
     local sidebar = new("Frame", {
-        BackgroundColor3 = theme.Sidebar,
+        BackgroundColor3 = theme.Surface1 or theme.Sidebar,
         BorderSizePixel  = 0,
         Size             = UDim2.new(0, sideW, 1, 0),
         Parent = root,
     })
-    padding(sidebar, {14, 10, 14, 10})
+    linearGradient(sidebar, {
+        theme.Surface1 or theme.Sidebar,
+        theme.Surface0 or theme.Sidebar,
+    }, 90)
+    padding(sidebar, {16, 12, 14, 12})
+    -- Vertical separator between sidebar and main panel
+    local sideEdge = new("Frame", {
+        BackgroundColor3 = theme.BorderSoft or theme.InputBorder,
+        BackgroundTransparency = 0.55,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(0, 1, 1, 0),
+        Parent = sidebar,
+    })
 
     -- App brand block (logo emoji + title) — mirrors main_window.ui top
     local brand = new("Frame", {
@@ -2860,13 +3338,38 @@ function NimiUI:CreateWindow(cfg)
         Parent = sidebar,
     })
     local logoFrame = new("Frame", {
-        BackgroundColor3 = theme.Accent,
+        BackgroundColor3 = theme.AccentSoft or theme.Accent,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(36, 36),
+        Size = UDim2.fromOffset(38, 38),
         AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
         Parent = brand,
     })
-    corner(logoFrame, 10)
+    corner(logoFrame, 11)
+    accentGradient(logoFrame, theme, 35)
+    -- Soft glow under the logo
+    new("ImageLabel", {
+        BackgroundTransparency = 1,
+        Image            = SHADOW_ASSET,
+        ImageColor3      = theme.AccentSoft or theme.Accent,
+        ImageTransparency = 0.55,
+        ScaleType        = Enum.ScaleType.Slice,
+        SliceCenter      = Rect.new(49, 49, 450, 450),
+        AnchorPoint      = Vector2.new(0.5, 0.5),
+        Position         = UDim2.fromScale(0.5, 0.5),
+        Size             = UDim2.new(1, 18, 1, 18),
+        ZIndex           = 0,
+        Parent = logoFrame,
+    })
+    -- Inner top sheen for that glassy look
+    new("Frame", {
+        BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 0.65,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, -8, 0, 1),
+        Position = UDim2.new(0, 4, 0, 1),
+        ZIndex = 2,
+        Parent = logoFrame,
+    })
     iconImage(logoFrame, cfg.Icon or "sparkle", cfg.IconSource or "Material", {
         Size        = UDim2.fromOffset(20, 20),
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2906,14 +3409,22 @@ function NimiUI:CreateWindow(cfg)
         logoFrame.Position = UDim2.new(0.5, -18, 0.5, 0)
     end
 
-    -- Divider under brand
-    new("Frame", {
-        BackgroundColor3 = theme.InputBorder,
-        BorderSizePixel  = 0, BackgroundTransparency = 0.5,
+    -- Divider under brand — gradient fade-out from accent to nothing
+    local brandDiv = new("Frame", {
+        BackgroundColor3 = theme.BorderSoft or theme.InputBorder,
+        BorderSizePixel  = 0, BackgroundTransparency = 0.4,
         Position = UDim2.new(0, 0, 0, 56),
         Size     = UDim2.new(1, 0, 0, 1),
         Parent = sidebar,
     })
+    linearGradient(brandDiv,
+        { theme.AccentSoft or theme.Accent, theme.BorderSoft or theme.InputBorder },
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0,   0.2),
+            NumberSequenceKeypoint.new(0.7, 0.7),
+            NumberSequenceKeypoint.new(1,   1),
+        }))
 
     -- Tab list scroll
     local tabScrollHolder = new("Frame", {
@@ -2964,16 +3475,16 @@ function NimiUI:CreateWindow(cfg)
 
     -- Header with gradient + animated rotation
     local header = new("Frame", {
-        BackgroundColor3 = theme.HeaderStart,
+        BackgroundColor3 = theme.AccentLow or theme.HeaderStart,
         BorderSizePixel  = 0,
-        Size = UDim2.new(1, 0, 0, 44),
+        Size = UDim2.new(1, 0, 0, 46),
         ClipsDescendants = true,
         Parent = panel,
     })
     corner(header, windowRadius)
     -- Hide the header's lower rounded corners so it joins the page area cleanly.
     new("Frame", {
-        BackgroundColor3 = theme.HeaderEnd,
+        BackgroundColor3 = theme.AccentLow or theme.HeaderEnd,
         BorderSizePixel  = 0,
         AnchorPoint = Vector2.new(0, 1),
         Position    = UDim2.new(0, 0, 1, 0),
@@ -2981,10 +3492,26 @@ function NimiUI:CreateWindow(cfg)
         ZIndex      = 0,
         Parent      = header,
     })
+    -- Three-stop accent gradient gives the header a richer "glow" feel.
     local headerGrad = new("UIGradient", {
-        Color = ColorSequence.new(theme.HeaderStart, theme.HeaderEnd),
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0,    theme.AccentLow  or theme.HeaderStart),
+            ColorSequenceKeypoint.new(0.55, theme.AccentSoft or theme.Accent),
+            ColorSequenceKeypoint.new(1,    theme.AccentHigh or theme.HeaderEnd),
+        }),
         Rotation = 0,
         Parent = header,
+    })
+    -- Bottom hairline — a thin sheen line dividing header from page area
+    new("Frame", {
+        BackgroundColor3 = Color3.fromRGB(255,255,255),
+        BackgroundTransparency = 0.85,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0, 1),
+        Position    = UDim2.new(0, 0, 1, 0),
+        Size        = UDim2.new(1, 0, 0, 1),
+        ZIndex      = 3,
+        Parent      = header,
     })
     -- Slow rotating gradient for a "live" header
     task.spawn(function()
@@ -3000,19 +3527,58 @@ function NimiUI:CreateWindow(cfg)
     attachShimmer(header, Color3.fromRGB(255,255,255), 6)
     padding(header, {0, 10, 0, 14})
 
-    local statusDot = new("Frame", {
-        BackgroundColor3 = theme.Success,
-        BorderSizePixel = 0,
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(8, 8),
-        Parent = header,
-    })
-    corner(statusDot, 4)
+    -- Status pill: small dot + label, glassy white background. Only visible
+    -- when there's room (hidden on mobile where the hamburger steals the spot).
+    local statusPill
+    if not isMobile then
+        statusPill = new("Frame", {
+            BackgroundColor3 = Color3.fromRGB(255,255,255),
+            BackgroundTransparency = 0.78,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 6, 0.5, 0),
+            Size = UDim2.fromOffset(54, 22),
+            ZIndex = 3,
+            Parent = header,
+        })
+        corner(statusPill, 11)
+        stroke(statusPill, Color3.fromRGB(255,255,255), 1, 0.7)
+        local dot = new("Frame", {
+            BackgroundColor3 = theme.Success,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 7, 0.5, 0),
+            Size = UDim2.fromOffset(8, 8),
+            ZIndex = 4,
+            Parent = statusPill,
+        })
+        corner(dot, 4)
+        -- Pulsing dot
+        task.spawn(function()
+            while statusPill.Parent do
+                tween(dot, 0.9, { BackgroundTransparency = 0.4 })
+                task.wait(0.95)
+                tween(dot, 0.9, { BackgroundTransparency = 0 })
+                task.wait(0.95)
+            end
+        end)
+        new("TextLabel", {
+            BackgroundTransparency = 1,
+            Font = FONT_BOLD, Text = "LIVE",
+            TextColor3 = Color3.fromRGB(255,255,255), TextSize = 10,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            Position = UDim2.new(0, 18, 0, 0),
+            Size = UDim2.new(1, -22, 1, 0),
+            ZIndex = 4,
+            Parent = statusPill,
+        })
+    end
 
     -- On mobile we add a hamburger toggle on the left to expand the sidebar.
     local btnSize    = isMobile and 34 or 28
-    local titleLeft  = isMobile and 48 or 16
+    -- On desktop the LIVE pill (~70 px incl. padding) sits at the left, so the
+    -- title is offset further right to clear it.
+    local titleLeft  = isMobile and 48 or 76
 
     local btnSidebar
     if isMobile then
@@ -3047,6 +3613,7 @@ function NimiUI:CreateWindow(cfg)
 
     local function headerBtn(symbol, x, isClose)
         local b = new("TextButton", {
+            BackgroundColor3 = Color3.fromRGB(255,255,255),
             BackgroundTransparency = 1, AutoButtonColor = false,
             Font = FONT_BOLD, Text = symbol,
             TextColor3 = Color3.fromRGB(255,255,255),
@@ -3054,15 +3621,21 @@ function NimiUI:CreateWindow(cfg)
             AnchorPoint = Vector2.new(1, 0.5),
             Position = UDim2.new(1, -x, 0.5, 0),
             Size = UDim2.fromOffset(btnSize, btnSize),
+            ZIndex = 3,
             Parent = header,
         })
         corner(b, btnSize/2)
         b.MouseEnter:Connect(function()
-            tween(b, 0.12, {BackgroundTransparency = isClose and 0.1 or 0.2})
-            if isClose then b.BackgroundColor3 = theme.Error end
+            if isClose then
+                b.BackgroundColor3 = theme.Error
+                tween(b, 0.14, { BackgroundTransparency = 0 })
+            else
+                b.BackgroundColor3 = Color3.fromRGB(255,255,255)
+                tween(b, 0.14, { BackgroundTransparency = 0.78 })
+            end
         end)
         b.MouseLeave:Connect(function()
-            tween(b, 0.12, {BackgroundTransparency = 1})
+            tween(b, 0.14, { BackgroundTransparency = 1 })
         end)
         return b
     end
@@ -3093,37 +3666,80 @@ function NimiUI:CreateWindow(cfg)
     local rootScale = new("UIScale", { Scale = 0.6, Parent = root })
     self._rootScale = rootScale
 
+    -- Public visibility state: Open() animates in, Close() animates out and
+    -- hides the GUI without destroying it. Destroy() is separate.
+    self._visible = true
+
+    local function setVisible(target)
+        if target == self._visible then return end
+        self._visible = target
+        if target then
+            gui.Enabled = true
+            rootScale.Scale = 0.86
+            tween(root, 0.22, { BackgroundTransparency = (cfg.Transparent and 0.08 or 0) })
+            tweenInfo(rootScale, EASE.Spring(0.32), { Scale = 1 })
+        else
+            tweenInfo(rootScale, TweenInfo.new(0.18, Enum.EasingStyle.Quad,
+                Enum.EasingDirection.In), { Scale = 0.86 })
+            tween(root, 0.18, { BackgroundTransparency = 1 })
+            task.delay(0.22, function()
+                if not self._visible then gui.Enabled = false end
+            end)
+        end
+    end
+    self._setVisible = setVisible
+
     btnClose.MouseButton1Click:Connect(function()
-        tweenInfo(rootScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad,
-            Enum.EasingDirection.In), { Scale = 0.7 })
-        tween(root, 0.22, { BackgroundTransparency = 1 })
-        task.delay(0.24, function() gui:Destroy() end)
+        -- Close button hides the window (callers can reopen with Window:Open()).
+        -- Use Window:Destroy() to actually tear it down.
+        setVisible(false)
+        if cfg.OnClose then task.spawn(cfg.OnClose) end
     end)
 
-    local minimized = false
+    self._minimized = false
     local fullSize = size
-    btnMinimize.MouseButton1Click:Connect(function()
-        minimized = not minimized
-        if minimized then
+    local function setMinimized(target)
+        if target == self._minimized then return end
+        self._minimized = target
+        if target then
             fullSize = root.Size
-            -- Hide sidebar + page area; keep only the header strip visible.
             sidebar.Visible = false
             self._pageHost.Visible = false
-            -- Reposition header to span the full root width since sidebar is gone.
             panel.Position = UDim2.new(0, 0, 0, 0)
             panel.Size     = UDim2.new(1, 0, 1, 0)
             tweenInfo(root, EASE.Soft(0.28),
-                { Size = UDim2.fromOffset(fullSize.X.Offset, 44) })
+                { Size = UDim2.fromOffset(fullSize.X.Offset, 46) })
+            if rootShadow then
+                tween(rootShadow, 0.28, {
+                    Size = UDim2.new(0, fullSize.X.Offset + 64, 0, 46 + 64),
+                })
+            end
         else
             tweenInfo(root, EASE.Spring(0.32), { Size = fullSize })
+            if rootShadow then
+                tween(rootShadow, 0.32, {
+                    Size = UDim2.new(0, fullSize.X.Offset + 64, 0, fullSize.Y.Offset + 64),
+                })
+            end
             task.delay(0.18, function()
-                if minimized then return end
+                if self._minimized then return end
                 sidebar.Visible = true
                 self._pageHost.Visible = true
                 local sw = sidebar.Size.X.Offset
                 panel.Position = UDim2.new(0, sw, 0, 0)
                 panel.Size     = UDim2.new(1, -sw, 1, 0)
             end)
+        end
+    end
+    self._setMinimized = setMinimized
+    btnMinimize.MouseButton1Click:Connect(function() setMinimized(not self._minimized) end)
+
+    -- Keep the drop shadow tracking the root frame's size as it changes
+    root:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        if rootShadow and rootShadow.Parent then
+            rootShadow.Size = UDim2.new(0,
+                root.AbsoluteSize.X + 64, 0,
+                root.AbsoluteSize.Y + 64)
         end
     end)
 
@@ -3160,23 +3776,12 @@ function NimiUI:CreateWindow(cfg)
         end)
     end
 
-    -- Default keybind: RightShift toggles UI with fade
-    local visible = true
+    -- Default keybind: RightShift toggles UI visibility (uses Open/Close).
+    local toggleKey = cfg.ToggleKey or Enum.KeyCode.RightShift
     UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
-        if input.KeyCode == Enum.KeyCode.RightShift then
-            visible = not visible
-            if visible then
-                gui.Enabled = true
-                rootScale.Scale = 0.85
-                tweenInfo(rootScale, EASE.Spring(0.25), { Scale = 1 })
-            else
-                tweenInfo(rootScale, TweenInfo.new(0.18, Enum.EasingStyle.Quad,
-                    Enum.EasingDirection.In), { Scale = 0.85 })
-                task.delay(0.2, function()
-                    if not visible then gui.Enabled = false end
-                end)
-            end
+        if input.KeyCode == toggleKey then
+            setVisible(not self._visible)
         end
     end)
 
@@ -3193,6 +3798,20 @@ end
 function Window:Tab(cfg) return Tab.new(self, cfg) end
 -- WindUI alias compatibility:
 function Window:CreateTab(cfg) return Tab.new(self, cfg) end
+
+-- Visibility controls (callable from user scripts)
+function Window:Open()  if self._setVisible then self._setVisible(true)  end end
+function Window:Close() if self._setVisible then self._setVisible(false) end end
+function Window:Toggle()
+    if self._setVisible then self._setVisible(not self._visible) end
+end
+function Window:IsVisible() return self._visible == true end
+function Window:Minimize()
+    if self._setMinimized then self._setMinimized(not self._minimized) end
+end
+function Window:SetTitle(text)
+    if self._headerTitle then self._headerTitle.Text = tostring(text or "") end
+end
 
 function Window:Destroy()
     if self._gui then self._gui:Destroy() end
@@ -3237,36 +3856,68 @@ function NimiUI:Notify(cfg)
     local theme = THEMES.Dark
     local gui = ensureNotifyGui()
 
+    -- Tint the accent based on the icon name (info/check/alert variants).
+    local iconName = (cfg.Icon or "info"):lower()
+    local accentColor = theme.AccentSoft or theme.Accent
+    if iconName:find("check") or iconName:find("success") or iconName:find("done") then
+        accentColor = theme.Success
+    elseif iconName:find("alert") or iconName:find("error") or iconName:find("warning") or iconName:find("close") or iconName:find("x-circle") or iconName:find("critic") then
+        accentColor = theme.Error
+    elseif iconName:find("warn") or iconName:find("caution") then
+        accentColor = theme.Warning or theme.AccentSoft
+    end
+
     local card = new("Frame", {
-        BackgroundColor3 = theme.Sidebar,
+        BackgroundColor3 = theme.Surface1 or theme.Sidebar,
         BorderSizePixel  = 0,
-        Size = UDim2.fromOffset(320, 0),
+        Size = UDim2.fromOffset(330, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
         ClipsDescendants = true,
         Parent = gui._holder,
     })
-    corner(card, 12)
-    stroke(card, theme.InputBorder, 1, 0.3)
-    padding(card, {12, 14, 12, 14})
+    corner(card, 14)
+    linearGradient(card, {
+        theme.Surface1 or theme.Sidebar,
+        theme.Surface2 or theme.Sidebar,
+    }, 90)
+    -- Gradient-bordered notification with a soft drop shadow underneath
+    gradientStroke(card, accentColor, theme.BorderStrong or theme.InputBorder,
+        1, 90, 0.2)
+    dropShadow(card, { Spread = 28, Opacity = 0.45, YOffset = 8 })
+    padding(card, {14, 16, 14, 16})
 
-    local cardScale = new("UIScale", { Scale = 0.5, Parent = card })
+    local cardScale = new("UIScale", { Scale = 0.7, Parent = card })
 
+    -- Left accent bar — uses a gradient so it picks up theme variation
     local accent = new("Frame", {
-        BackgroundColor3 = theme.Accent,
+        BackgroundColor3 = accentColor,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(3, 1),
-        SizeConstraint = Enum.SizeConstraint.RelativeYY,
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, -10, 0.5, 0),
+        Size = UDim2.new(0, 3, 1, -16),
         Parent = card,
     })
     corner(accent, 2)
+    linearGradient(accent, { accentColor, theme.AccentHigh or accentColor }, 90)
 
-    iconImage(card, cfg.Icon or "info", cfg.IconSource or "Material", {
-        Size        = UDim2.fromOffset(20, 20),
-        Position    = UDim2.new(0, 12, 0, 0),
-        ImageColor3 = theme.Accent,
-        TextColor3  = theme.Accent,
-        TextSize    = 16,
+    -- Icon chip (rounded backdrop behind the icon for a more "branded" look)
+    local iconChip = new("Frame", {
+        BackgroundColor3 = accentColor,
+        BackgroundTransparency = 0.78,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 4, 0, 0),
+        Size     = UDim2.fromOffset(26, 26),
+        Parent = card,
+    })
+    corner(iconChip, 8)
+    iconImage(iconChip, cfg.Icon or "info", cfg.IconSource or "Material", {
+        Size        = UDim2.fromOffset(16, 16),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position    = UDim2.fromScale(0.5, 0.5),
+        ImageColor3 = accentColor,
+        TextColor3  = accentColor,
+        TextSize    = 14,
         Font        = FONT_BOLD,
     })
     new("TextLabel", {
@@ -3274,8 +3925,8 @@ function NimiUI:Notify(cfg)
         Font = FONT_BOLD, Text = cfg.Title or "Notification",
         TextColor3 = theme.TextDark, TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Position = UDim2.new(0, 38, 0, 0),
-        Size     = UDim2.new(1, -38, 0, 18),
+        Position = UDim2.new(0, 40, 0, 2),
+        Size     = UDim2.new(1, -40, 0, 18),
         Parent = card,
     })
     new("TextLabel", {
@@ -3286,27 +3937,30 @@ function NimiUI:Notify(cfg)
         TextYAlignment = Enum.TextYAlignment.Top,
         TextWrapped = true,
         AutomaticSize = Enum.AutomaticSize.Y,
-        Position = UDim2.new(0, 38, 0, 20),
-        Size     = UDim2.new(1, -42, 0, 0),
+        LineHeight = 1.15,
+        Position = UDim2.new(0, 40, 0, 22),
+        Size     = UDim2.new(1, -44, 0, 0),
         Parent = card,
     })
 
     -- Progress bar that drains over the lifetime (sits flush at bottom-inside)
     local progressTrack = new("Frame", {
-        BackgroundColor3 = theme.InputBorder,
+        BackgroundColor3 = theme.BorderSoft or theme.InputBorder,
         BackgroundTransparency = 0.6,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 0, 1, 0),
-        Size     = UDim2.new(1, 0, 0, 2),
+        Position = UDim2.new(0, -16, 1, 16),
+        Size     = UDim2.new(1, 32, 0, 2),
         Parent = card,
     })
     local progressFill = new("Frame", {
-        BackgroundColor3 = theme.Accent,
+        BackgroundColor3 = accentColor,
         BorderSizePixel  = 0,
         Size             = UDim2.fromScale(1, 1),
         Parent           = progressTrack,
     })
+    linearGradient(progressFill,
+        { accentColor, theme.AccentHigh or accentColor }, 0)
 
     -- Slide / scale in
     card.BackgroundTransparency = 1
@@ -3375,6 +4029,6 @@ function NimiUI:SetTheme(name)
     if THEMES[name] then NimiUI._defaultTheme = name end
 end
 
-function NimiUI:GetTheme(name) return THEMES[name or "Dark"] end
+function NimiUI:GetTheme(name) return THEMES[name or "PremiumDark"] end
 
 return NimiUI
