@@ -3281,8 +3281,8 @@ function NimiUI:CreateWindow(cfg)
         Parent = gui,
     })
 
-    -- Root window frame
-    local root = new("Frame", {
+    -- Root window frame - Using CanvasGroup to perfectly clip rounded corners
+    local root = new("CanvasGroup", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position    = UDim2.fromScale(0.5, 0.5),
         Size        = size,
@@ -3293,16 +3293,7 @@ function NimiUI:CreateWindow(cfg)
         Parent = gui,
     })
     
-    -- Using a main container to handle proper UICorner clipping in Roblox
-    local mainContainer = new("Frame", {
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        ClipsDescendants = true,
-        Parent = root,
-    })
-    
     corner(root, windowRadius)
-    corner(mainContainer, windowRadius)
     
     -- Subtle vertical surface gradient adds depth across the whole window
     linearGradient(root, {
@@ -3323,7 +3314,7 @@ function NimiUI:CreateWindow(cfg)
         BackgroundColor3 = theme.Surface1 or theme.Sidebar,
         BorderSizePixel  = 0,
         Size             = UDim2.new(0, sideW, 1, 0),
-        Parent = mainContainer,
+        Parent = root,
     })
     linearGradient(sidebar, {
         theme.Surface1 or theme.Sidebar,
@@ -3474,18 +3465,14 @@ function NimiUI:CreateWindow(cfg)
         Parent = footer,
     })
 
-    -- Main panel (chat_area equivalent) - modern floating rounded look
-    local panelPadding = 6
+    -- Main panel (chat_area equivalent) - full window rounded
     local panel = new("Frame", {
         BackgroundColor3 = theme.ChatArea,
         BorderSizePixel  = 0,
-        Position = UDim2.new(0, sideW + panelPadding, 0, panelPadding),
-        Size     = UDim2.new(1, -sideW - (panelPadding*2), 1, -(panelPadding*2)),
-        ClipsDescendants = true,
-        Parent = mainContainer,
+        Position = UDim2.new(0, sideW, 0, 0),
+        Size     = UDim2.new(1, -sideW, 1, 0),
+        Parent = root,
     })
-    corner(panel, 14)
-    stroke(panel, theme.BorderSoft or theme.InputBorder, 1, 0.4)
 
     -- Header with gradient + animated rotation
     local header = new("Frame", {
@@ -3715,9 +3702,6 @@ function NimiUI:CreateWindow(cfg)
             panel.Size     = UDim2.new(1, 0, 1, 0)
             tweenInfo(root, EASE.Soft(0.28),
                 { Size = UDim2.fromOffset(fullSize.X.Offset, 46) })
-            -- Match mainContainer with root size logic
-            tweenInfo(mainContainer, EASE.Soft(0.28),
-                { Size = UDim2.fromOffset(fullSize.X.Offset, 46) })
             if rootShadow then
                 tween(rootShadow, 0.28, {
                     Size = UDim2.new(0, fullSize.X.Offset + 64, 0, 46 + 64),
@@ -3725,7 +3709,6 @@ function NimiUI:CreateWindow(cfg)
             end
         else
             tweenInfo(root, EASE.Spring(0.32), { Size = fullSize })
-            tweenInfo(mainContainer, EASE.Spring(0.32), { Size = fullSize })
             if rootShadow then
                 tween(rootShadow, 0.32, {
                     Size = UDim2.new(0, fullSize.X.Offset + 64, 0, fullSize.Y.Offset + 64),
@@ -3736,8 +3719,8 @@ function NimiUI:CreateWindow(cfg)
                 sidebar.Visible = true
                 self._pageHost.Visible = true
                 local sw = sidebar.Size.X.Offset
-                panel.Position = UDim2.new(0, sw + panelPadding, 0, panelPadding)
-                panel.Size     = UDim2.new(1, -sw - (panelPadding*2), 1, -(panelPadding*2))
+                panel.Position = UDim2.new(0, sw, 0, 0)
+                panel.Size     = UDim2.new(1, -sw, 1, 0)
             end)
         end
     end
@@ -3761,8 +3744,8 @@ function NimiUI:CreateWindow(cfg)
             tweenInfo(sidebar, EASE.Soft(0.22),
                 { Size = UDim2.new(0, target, 1, 0) })
             tweenInfo(panel, EASE.Soft(0.22),
-                { Position = UDim2.new(0, target + panelPadding, 0, panelPadding),
-                  Size     = UDim2.new(1, -target - (panelPadding*2), 1, -(panelPadding*2)) })
+                { Position = UDim2.new(0, target, 0, 0),
+                  Size     = UDim2.new(1, -target, 1, 0) })
             -- Toggle visibility of text labels in sidebar
             brandTitle.Visible  = expanded
             if brandAuthor then brandAuthor.Visible = expanded end
