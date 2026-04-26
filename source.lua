@@ -2623,8 +2623,17 @@ function Tab.new(window, cfg)
         TextXAlignment = Enum.TextXAlignment.Left,
         Position = UDim2.new(0, 38, 0, 0),
         Size     = UDim2.new(1, -46, 1, 0),
+        Visible  = not (window._isMobile and window._sidebarCollapsed),
         Parent = btn,
     })
+    if window._isMobile then
+        -- Center icon when in collapsed (icon-only) mobile mode
+        if window._sidebarCollapsed then
+            icon.AnchorPoint = Vector2.new(0.5, 0.5)
+            icon.Position    = UDim2.fromScale(0.5, 0.5)
+        end
+        table.insert(window._tabIcons or {}, { icon = icon, title = title })
+    end
 
     -- Page (content frame)
     local page = new("Frame", {
@@ -2776,9 +2785,34 @@ function NimiUI:CreateWindow(cfg)
     self._tabs   = {}
     self._cfg    = cfg
 
-    local size = cfg.Size or UDim2.fromOffset(820, 560)
-    local sideW = cfg.SideBarWidth or 220
-    local windowRadius = cfg.Radius or 30
+    -- Mobile / small-viewport detection: shrink defaults so the window fits.
+    local cam = workspace.CurrentCamera
+    local vp = (cam and cam.ViewportSize) or Vector2.new(1280, 720)
+    local isTouch  = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+    local isMobile = cfg.Mobile
+    if isMobile == nil then isMobile = isTouch or vp.X < 700 end
+
+    local defaultSize, defaultSide, defaultRadius
+    if isMobile then
+        local w = math.min(vp.X - 16, 540)
+        local h = math.min(vp.Y - 60, 420)
+        defaultSize   = UDim2.fromOffset(w, h)
+        defaultSide   = 56   -- icon-only collapsed sidebar
+        defaultRadius = 22
+    else
+        defaultSize   = UDim2.fromOffset(820, 560)
+        defaultSide   = 220
+        defaultRadius = 30
+    end
+
+    local size         = cfg.Size or defaultSize
+    local sideW        = cfg.SideBarWidth or defaultSide
+    local windowRadius = cfg.Radius or defaultRadius
+    self._isMobile         = isMobile
+    self._sidebarCollapsed = isMobile        -- start collapsed on mobile
+    self._sideExpanded     = isMobile and 200 or sideW
+    self._sideCollapsed    = 56
+    self._tabIcons         = {}
 
     -- Host ScreenGui
     local gui = new("ScreenGui", {
@@ -2840,7 +2874,7 @@ function NimiUI:CreateWindow(cfg)
         Font        = FONT_BOLD,
     })
 
-    new("TextLabel", {
+    local brandTitle = new("TextLabel", {
         BackgroundTransparency = 1,
         Font = FONT_BOLD, Text = cfg.Title or "NimiUI",
         TextColor3 = theme.TextDark, TextSize = 15,
@@ -2848,10 +2882,12 @@ function NimiUI:CreateWindow(cfg)
         TextTruncate = Enum.TextTruncate.AtEnd,
         Position = UDim2.new(0, 46, 0, 0),
         Size     = UDim2.new(1, -46, 0, 22),
+        Visible  = not self._sidebarCollapsed,
         Parent = brand,
     })
+    local brandAuthor
     if cfg.Author then
-        new("TextLabel", {
+        brandAuthor = new("TextLabel", {
             BackgroundTransparency = 1,
             Font = FONT, Text = cfg.Author,
             TextColor3 = theme.TextLight, TextSize = 11,
@@ -2859,8 +2895,12 @@ function NimiUI:CreateWindow(cfg)
             TextTruncate = Enum.TextTruncate.AtEnd,
             Position = UDim2.new(0, 46, 0, 22),
             Size     = UDim2.new(1, -46, 0, 16),
+            Visible  = not self._sidebarCollapsed,
             Parent = brand,
         })
+    end
+    if self._sidebarCollapsed then
+        logoFrame.Position = UDim2.new(0.5, -18, 0.5, 0)
     end
 
     -- Divider under brand
@@ -2906,6 +2946,7 @@ function NimiUI:CreateWindow(cfg)
         TextColor3 = theme.TextLight, TextSize = 10,
         TextXAlignment = Enum.TextXAlignment.Left,
         Size = UDim2.fromScale(1, 1),
+        Visible  = not self._sidebarCollapsed,
         Parent = footer,
     })
 
@@ -2966,13 +3007,38 @@ function NimiUI:CreateWindow(cfg)
     })
     corner(statusDot, 4)
 
+    -- On mobile we add a hamburger toggle on the left to expand the sidebar.
+    local btnSize    = isMobile and 34 or 28
+    local titleLeft  = isMobile and 48 or 16
+
+    local btnSidebar
+    if isMobile then
+        btnSidebar = new("TextButton", {
+            BackgroundTransparency = 1, AutoButtonColor = false,
+            Font = FONT_BOLD, Text = "≡",
+            TextColor3 = Color3.fromRGB(255,255,255), TextSize = 22,
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 8, 0.5, 0),
+            Size = UDim2.fromOffset(btnSize, btnSize),
+            Parent = header,
+        })
+        corner(btnSidebar, btnSize/2)
+        btnSidebar.MouseEnter:Connect(function()
+            tween(btnSidebar, 0.12, {BackgroundTransparency = 0.2})
+        end)
+        btnSidebar.MouseLeave:Connect(function()
+            tween(btnSidebar, 0.12, {BackgroundTransparency = 1})
+        end)
+    end
+
     self._headerTitle = new("TextLabel", {
         BackgroundTransparency = 1,
         Font = FONT_BOLD, Text = cfg.Title or "",
         TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Position = UDim2.new(0, 16, 0, 0),
-        Size     = UDim2.new(1, -120, 1, 0),
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Position = UDim2.new(0, titleLeft, 0, 0),
+        Size     = UDim2.new(1, -(titleLeft + (btnSize*2 + 24)), 1, 0),
         Parent = header,
     })
 
@@ -2980,13 +3046,14 @@ function NimiUI:CreateWindow(cfg)
         local b = new("TextButton", {
             BackgroundTransparency = 1, AutoButtonColor = false,
             Font = FONT_BOLD, Text = symbol,
-            TextColor3 = Color3.fromRGB(255,255,255), TextSize = 14,
+            TextColor3 = Color3.fromRGB(255,255,255),
+            TextSize = isMobile and 18 or 14,
             AnchorPoint = Vector2.new(1, 0.5),
             Position = UDim2.new(1, -x, 0.5, 0),
-            Size = UDim2.fromOffset(28, 28),
+            Size = UDim2.fromOffset(btnSize, btnSize),
             Parent = header,
         })
-        corner(b, 14)
+        corner(b, btnSize/2)
         b.MouseEnter:Connect(function()
             tween(b, 0.12, {BackgroundTransparency = isClose and 0.1 or 0.2})
             if isClose then b.BackgroundColor3 = theme.Error end
@@ -2996,8 +3063,8 @@ function NimiUI:CreateWindow(cfg)
         end)
         return b
     end
-    local btnClose    = headerBtn("✕", 4, true)
-    local btnMinimize = headerBtn("—", 36, false)
+    local btnClose    = headerBtn("✕", 6, true)
+    local btnMinimize = headerBtn("—", 6 + btnSize + 4, false)
 
     -- Page host (right of sidebar, below header)
     self._pageHost = new("Frame", {
@@ -3050,11 +3117,45 @@ function NimiUI:CreateWindow(cfg)
                 if minimized then return end
                 sidebar.Visible = true
                 self._pageHost.Visible = true
-                panel.Position = UDim2.new(0, sideW, 0, 0)
-                panel.Size     = UDim2.new(1, -sideW, 1, 0)
+                local sw = sidebar.Size.X.Offset
+                panel.Position = UDim2.new(0, sw, 0, 0)
+                panel.Size     = UDim2.new(1, -sw, 1, 0)
             end)
         end
     end)
+
+    -- Mobile sidebar toggle: animate sideW between collapsed/expanded.
+    if btnSidebar then
+        local function applySidebar(expanded)
+            self._sidebarCollapsed = not expanded
+            local target = expanded and self._sideExpanded or self._sideCollapsed
+            tweenInfo(sidebar, EASE.Soft(0.22),
+                { Size = UDim2.new(0, target, 1, 0) })
+            tweenInfo(panel, EASE.Soft(0.22),
+                { Position = UDim2.new(0, target, 0, 0),
+                  Size     = UDim2.new(1, -target, 1, 0) })
+            -- Toggle visibility of text labels in sidebar
+            brandTitle.Visible  = expanded
+            if brandAuthor then brandAuthor.Visible = expanded end
+            ver.Visible         = expanded
+            logoFrame.Position  = expanded
+                and UDim2.new(0, 0, 0.5, 0)
+                or  UDim2.new(0.5, -18, 0.5, 0)
+            for _, t in ipairs(self._tabIcons) do
+                t.title.Visible = expanded
+                if expanded then
+                    t.icon.AnchorPoint = Vector2.new(0, 0.5)
+                    t.icon.Position    = UDim2.new(0, 12, 0.5, 0)
+                else
+                    t.icon.AnchorPoint = Vector2.new(0.5, 0.5)
+                    t.icon.Position    = UDim2.fromScale(0.5, 0.5)
+                end
+            end
+        end
+        btnSidebar.MouseButton1Click:Connect(function()
+            applySidebar(self._sidebarCollapsed)  -- expand if currently collapsed
+        end)
+    end
 
     -- Default keybind: RightShift toggles UI with fade
     local visible = true
