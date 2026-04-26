@@ -1921,13 +1921,13 @@ local function tween(obj, t, props, style, dir)
     return tw
 end
 
--- Easing presets — spring-y feel for popups, soft for hovers, snappy for clicks.
+-- Easing presets — modern, ultra-smooth physics-based feel
 local EASE = {
-    Spring = function(t) return TweenInfo.new(t or 0.32, Enum.EasingStyle.Back,        Enum.EasingDirection.Out, 0, false, 0) end,
-    Soft   = function(t) return TweenInfo.new(t or 0.18, Enum.EasingStyle.Quint,       Enum.EasingDirection.Out) end,
-    Snap   = function(t) return TweenInfo.new(t or 0.10, Enum.EasingStyle.Quad,        Enum.EasingDirection.Out) end,
-    Slide  = function(t) return TweenInfo.new(t or 0.35, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) end,
-    Ease   = function(t) return TweenInfo.new(t or 0.25, Enum.EasingStyle.Cubic,       Enum.EasingDirection.Out) end,
+    Spring = function(t) return TweenInfo.new(t or 0.45, Enum.EasingStyle.Back,        Enum.EasingDirection.Out, 0, false, 0) end,
+    Soft   = function(t) return TweenInfo.new(t or 0.25, Enum.EasingStyle.Quart,       Enum.EasingDirection.Out) end,
+    Snap   = function(t) return TweenInfo.new(t or 0.15, Enum.EasingStyle.Quad,        Enum.EasingDirection.Out) end,
+    Slide  = function(t) return TweenInfo.new(t or 0.45, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out) end,
+    Ease   = function(t) return TweenInfo.new(t or 0.35, Enum.EasingStyle.Cubic,       Enum.EasingDirection.Out) end,
 }
 
 local function tweenInfo(obj, info, props)
@@ -3474,14 +3474,18 @@ function NimiUI:CreateWindow(cfg)
         Parent = footer,
     })
 
-    -- Main panel (chat_area equivalent)
+    -- Main panel (chat_area equivalent) - modern floating rounded look
+    local panelPadding = 6
     local panel = new("Frame", {
         BackgroundColor3 = theme.ChatArea,
         BorderSizePixel  = 0,
-        Position = UDim2.new(0, sideW, 0, 0),
-        Size     = UDim2.new(1, -sideW, 1, 0),
+        Position = UDim2.new(0, sideW + panelPadding, 0, panelPadding),
+        Size     = UDim2.new(1, -sideW - (panelPadding*2), 1, -(panelPadding*2)),
+        ClipsDescendants = true,
         Parent = mainContainer,
     })
+    corner(panel, 14)
+    stroke(panel, theme.BorderSoft or theme.InputBorder, 1, 0.4)
 
     -- Header with gradient + animated rotation
     local header = new("Frame", {
@@ -3732,8 +3736,8 @@ function NimiUI:CreateWindow(cfg)
                 sidebar.Visible = true
                 self._pageHost.Visible = true
                 local sw = sidebar.Size.X.Offset
-                panel.Position = UDim2.new(0, sw, 0, 0)
-                panel.Size     = UDim2.new(1, -sw, 1, 0)
+                panel.Position = UDim2.new(0, sw + panelPadding, 0, panelPadding)
+                panel.Size     = UDim2.new(1, -sw - (panelPadding*2), 1, -(panelPadding*2))
             end)
         end
     end
@@ -3757,8 +3761,8 @@ function NimiUI:CreateWindow(cfg)
             tweenInfo(sidebar, EASE.Soft(0.22),
                 { Size = UDim2.new(0, target, 1, 0) })
             tweenInfo(panel, EASE.Soft(0.22),
-                { Position = UDim2.new(0, target, 0, 0),
-                  Size     = UDim2.new(1, -target, 1, 0) })
+                { Position = UDim2.new(0, target + panelPadding, 0, panelPadding),
+                  Size     = UDim2.new(1, -target - (panelPadding*2), 1, -(panelPadding*2)) })
             -- Toggle visibility of text labels in sidebar
             brandTitle.Visible  = expanded
             if brandAuthor then brandAuthor.Visible = expanded end
