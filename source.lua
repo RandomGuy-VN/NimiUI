@@ -3466,17 +3466,14 @@ function NimiUI:CreateWindow(cfg)
         Parent = footer,
     })
 
-    -- Main panel (chat_area equivalent) - modern floating rounded look
-    local panelPadding = 6
-    local panel = new("CanvasGroup", {
+    -- Main panel (chat_area equivalent) - full window rounded
+    local panel = new("Frame", {
         BackgroundColor3 = theme.ChatArea,
         BorderSizePixel  = 0,
-        Position = UDim2.new(0, sideW + panelPadding, 0, panelPadding),
-        Size     = UDim2.new(1, -sideW - (panelPadding*2), 1, -(panelPadding*2)),
+        Position = UDim2.new(0, sideW, 0, 0),
+        Size     = UDim2.new(1, -sideW, 1, 0),
         Parent = root,
     })
-    corner(panel, 14)
-    stroke(panel, theme.BorderSoft or theme.InputBorder, 1, 0.4)
 
     -- Header with gradient + animated rotation
     local header = new("Frame", {
